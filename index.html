@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KOSKS | Kış Ortası Su Kuşu Sayımları</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- Supabase JS Client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --primary:#0a4d68;--primary-dark:#063a50;--primary-light:#1a6f8e;
+  --accent:#b8860b;--accent-light:#d4a017;
+  --bg:#f3f1ec;--bg-card:#ffffff;
+  --text:#1a1a2e;--text-muted:#5a6a7a;
+  --border:#d0dde6;
+  --danger:#c0392b;--success:#1a7a47;--warning:#d68910;
+  --radius:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+.screen{display:none;min-height:100vh;flex-direction:column;}
+.screen.active{display:flex;}
+
+/* ===== SUPABASE DURUM ===== */
+.supabase-status{
+  position:fixed;top:10px;right:10px;padding:10px 15px;border-radius:6px;font-size:12px;z-index:1000;
+  font-weight:600;transition:all 0.3s;
+}
+.supabase-status.connected{background:#d4edda;color:#155724;}
+.supabase-status.disconnected{background:#f8d7da;color:#721c24;}
+
+/* ===== LANDING ===== */
+#screen-landing{
+  background:
+    linear-gradient(to bottom, rgba(2,18,26,0.48) 0%, rgba(4,32,44,0.62) 100%),
+    url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><defs><linearGradient id="water" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:%231e90ff;stop-opacity:0.1"/><stop offset="100%" style="stop-color:%230a3050;stop-opacity:0.3"/></linearGradient></defs><rect fill="url(%23water)" width="1200" height="800"/><circle cx="150" cy="300" r="80" fill="white" opacity="0.03"/><circle cx="1100" cy="500" r="120" fill="white" opacity="0.02"/></svg>'),
+    linear-gradient(135deg, #0a4d68 0%, #063a50 100%);
+  background-size: cover,cover,cover;
+  background-position: center,center,center;
+  background-attachment: fixed;
+  position:relative;padding:40px 20px;justify-content:center;align-items:center;
+}
+#screen-landing h1{font-family:'Playfair Display',serif;font-size:4rem;color:#ffffff;text-align:center;margin-bottom:10px;text-shadow:2px 2px 4px rgba(0,0,0,0.3);}
+#screen-landing p{color:#b8d4e6;font-size:1.2rem;text-align:center;margin-bottom:40px;max-width:600px;}
+#screen-landing button{background:var(--accent);color:white;border:none;padding:12px 40px;font-size:1rem;border-radius:var(--radius);cursor:pointer;transition:all 0.3s;box-shadow:0 4px 15px rgba(184,134,11,0.3);}
+#screen-landing button:hover{background:var(--accent-light);transform:translateY(-2px);box-shadow:0 6px 20px rgba(184,134,11,0.4);}
+
+/* ===== MAIN APP ===== */
+.header{background:var(--primary);color:white;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);}
+.header h2{margin:0;font-size:1.8rem;font-family:'Playfair Display',serif;}
+.container{flex:1;overflow-y:auto;padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+.form-card{background:var(--bg-card);padding:20px;border-radius:var(--radius);box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid var(--primary);}
+.form-card h3{margin-bottom:15px;color:var(--text);font-size:1.1rem;}
+.form-group{margin-bottom:15px;}
+label{display:block;margin-bottom:5px;font-weight:600;color:var(--text);font-size:0.9rem;}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:0.95rem;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(10,77,104,0.1);}
+button{background:var(--primary);color:white;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;transition:all 0.3s;font-weight:600;}
+button:hover{background:var(--primary-dark);transform:translateY(-1px);}
+.btn-secondary{background:var(--accent);}
+.btn-secondary:hover{background:var(--accent-light);}
+.btn-danger{background:var(--danger);}
+.btn-danger:hover{background:#a93226;}
+.btn-success{background:var(--success);}
+.btn-success:hover{background:#155e3b;}
+
+/* ===== TABLO ===== */
+.table-container{grid-column:1/-1;overflow-x:auto;}
+.table-container h3{margin-bottom:15px;color:var(--text);}
+table{width:100%;border-collapse:collapse;background:var(--bg-card);border-radius:var(--radius);overflow:hidden;}
+th{background:var(--primary);color:white;padding:12px;text-align:left;font-weight:600;font-size:0.9rem;}
+td{padding:12px;border-bottom:1px solid var(--border);font-size:0.9rem;}
+tr:hover{background:var(--bg);}
+.status-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:0.85rem;font-weight:600;}
+.status-submitted{background:#d4edda;color:#155724;}
+.status-pending{background:#fff3cd;color:#856404;}
+
+/* ===== HARITA ===== */
+#map{height:500px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);}
+
+/* ===== MODAL ===== */
+.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);justify-content:center;align-items:center;z-index:999;}
+.modal.active{display:flex;}
+.modal-content{background:white;padding:30px;border-radius:var(--radius);max-width:500px;width:90%;}
+.modal-content h3{margin-bottom:15px;color:var(--text);}
+.close-modal{float:right;cursor:pointer;font-size:24px;color:var(--text-muted);}
+
+/* ===== RESPONSIF ===== */
+@media (max-width:768px){
+  .container{grid-template-columns:1fr;}
+  #screen-landing h1{font-size:2.5rem;}
+  .status-badge{font-size:0.75rem;}
+  table{font-size:0.8rem;}
+}
+</style>
+</head>
+<body>
+
+<!-- SUPABASE DURUM GÖSTERGESİ -->
+<div id="supabaseStatus" class="supabase-status disconnected">⚫ Supabase Bağlantısı Yok</div>
+
+<!-- LANDING SCREEN -->
+<div id="screen-landing" class="screen active">
+  <h1>🦆 KOSKS</h1>
+  <p>Kış Ortası Su Kuşu Sayımları</p>
+  <button onclick="startApp()">Uygulamaya Başla</button>
+</div>
+
+<!-- MAIN APP SCREEN -->
+<div id="screen-app" class="screen">
+  <div class="header">
+    <h2>📊 KOSKS Veri Giriş Sistemi</h2>
+  </div>
+  <div class="container">
+    <!-- FORM PANELI -->
+    <div class="form-card">
+      <h3>Veri Giriş Formu</h3>
+      <div class="form-group">
+        <label>İl Seç:</label>
+        <select id="regionSelect" onchange="updateAreas()">
+          <option value="">İl Seçiniz</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Alan Seç:</label>
+        <select id="areaSelect" onchange="updatePoints()">
+          <option value="">Alan Seçiniz</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Noktayı Seç:</label>
+        <select id="pointSelect">
+          <option value="">Nokta Seçiniz</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Tarih:</label>
+        <input type="date" id="dateInput" value="">
+      </div>
+      <div class="form-group">
+        <label>Tür (Bilimsel Ad):</label>
+        <input type="text" id="speciesInput" placeholder="Örn: Podiceps cristatus">
+      </div>
+      <div class="form-group">
+        <label>Birey Sayısı:</label>
+        <input type="number" id="countInput" min="0" value="0">
+      </div>
+      <div class="form-group">
+        <label>Notlar:</label>
+        <textarea id="notesInput" rows="3" placeholder="Opsiyonel notlar"></textarea>
+      </div>
+      <button onclick="submitRecord()">Kaydı Gönder</button>
+      <button class="btn-secondary" onclick="exportData()" style="margin-top:10px;">Excel'e İndir</button>
+      <button class="btn-danger" onclick="logout()" style="margin-top:10px;">Çıkış Yap</button>
+    </div>
+
+    <!-- HARITA PANELI -->
+    <div class="form-card">
+      <h3>Harita</h3>
+      <div id="map"></div>
+    </div>
+
+    <!-- KAYITLAR TABLOSU -->
+    <div class="table-container">
+      <h3>Gönderilen Kayıtlar</h3>
+      <table id="recordsTable">
+        <thead>
+          <tr>
+            <th>İl</th>
+            <th>Alan</th>
+            <th>Nokta</th>
+            <th>Tarih</th>
+            <th>Tür</th>
+            <th>Sayı</th>
+            <th>Durum</th>
+            <th>İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="recordsBody">
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============ SUPABASE AYARLARI ============
+// Bu değerleri Supabase projenizden alın ve aşağıya yazın
+const SUPABASE_CONFIG = {
+  url: 'https://rrolbmuradxjtiyfkcnu.supabase.co',      // Örn: https://xxxxx.supabase.co
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJyb2xibXVyYWR4anRpeWZrY251Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0Mjc4MzUsImV4cCI6MjA5MDAwMzgzNX0.223uAP81-vPJzp5kNEPlzQcPVqsfJ10MV9S8edajkus'       // Proje API anahtarını buraya yapıştırın
+};
+
+let supabase = null;
+let supabaseReady = false;
+
+// Supabase başlatma
+function initSupabase() {
+  if (SUPABASE_CONFIG.url === 'YOUR_SUPABASE_URL_HERE' || SUPABASE_CONFIG.anonKey === 'YOUR_ANON_KEY_HERE') {
+    console.warn('⚠️ Supabase ayarları tamamlanmamış. Lütfen index.html dosyasını düzenleyip SUPABASE_URL ve ANON_KEY ekleyin.');
+    updateSupabaseStatus(false, 'Ayarlar eksik');
+    return false;
+  }
+  
+  try {
+    supabase = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+    supabaseReady = true;
+    updateSupabaseStatus(true, 'Bağlı');
+    console.log('✅ Supabase bağlantı başarılı');
+    return true;
+  } catch (error) {
+    console.error('❌ Supabase bağlantı hatası:', error);
+    updateSupabaseStatus(false, 'Bağlantı hatası');
+    return false;
+  }
+}
+
+function updateSupabaseStatus(connected, message) {
+  const status = document.getElementById('supabaseStatus');
+  if (connected) {
+    status.className = 'supabase-status connected';
+    status.textContent = '🟢 ' + message;
+  } else {
+    status.className = 'supabase-status disconnected';
+    status.textContent = '🔴 ' + message;
+  }
+}
+
+// ============ VERİ YÖNETIMI ============
+let selectedRegion = null;
+let selectedArea = null;
+let selectedPoint = null;
+let allRecords = [];
+
+const regions = {
+  'Adana': { code: 'Ada', areas: [
+    { id: 'area_Ada_001', name: 'Tarsus Göletleri', points: ['Kuzey Gölet', 'Orta Gölet', 'Güney Gölet'] },
+    { id: 'area_Ada_002', name: 'Akdeniz Kıyıları', points: ['Kum Plajı', 'Kayalık Kıyı'] }
+  ]},
+  'Ankara': { code: 'Ank', areas: [
+    { id: 'area_Ank_001', name: 'Eymir Gölü', points: ['Doğu Noktası', 'Batı Noktası'] },
+    { id: 'area_Ank_002', name: 'Mogan Gölü', points: ['Kuzey', 'Güney', 'Merkez'] }
+  ]},
+  'Antalya': { code: 'Ant', areas: [
+    { id: 'area_Ant_001', name: 'Köyceğiz Gölü', points: ['İskele', 'Kumluca'] }
+  ]},
+  'Van': { code: 'Van', areas: [
+    { id: 'area_Van_001', name: 'Van Gölü', points: ['Edremit', 'Tatvan', 'Gevaş'] }
+  ]}
+};
+
+// ============ UYGULAMA BAŞLATMA ============
+function startApp() {
+  // Supabase'i başlat
+  initSupabase();
+  
+  // Tarih alanına bugünün tarihini koy
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('dateInput').value = today;
+  
+  // Bölgeleri doldur
+  populateRegions();
+  
+  // Haritayı başlat
+  setTimeout(initMap, 100);
+  
+  // Ekranları değiştir
+  document.getElementById('screen-landing').classList.remove('active');
+  document.getElementById('screen-app').classList.add('active');
+  
+  // Verileri yükle
+  loadRecords();
+}
+
+function populateRegions() {
+  const select = document.getElementById('regionSelect');
+  Object.keys(regions).forEach(region => {
+    const option = document.createElement('option');
+    option.value = region;
+    option.textContent = region;
+    select.appendChild(option);
+  });
+}
+
+function updateAreas() {
+  selectedRegion = document.getElementById('regionSelect').value;
+  const areaSelect = document.getElementById('areaSelect');
+  areaSelect.innerHTML = '<option value="">Alan Seçiniz</option>';
+  document.getElementById('pointSelect').innerHTML = '<option value="">Nokta Seçiniz</option>';
+  
+  if (!selectedRegion) return;
+  
+  regions[selectedRegion].areas.forEach(area => {
+    const option = document.createElement('option');
+    option.value = area.id;
+    option.dataset.name = area.name;
+    option.textContent = area.name;
+    areaSelect.appendChild(option);
+  });
+}
+
+function updatePoints() {
+  selectedArea = document.getElementById('areaSelect').value;
+  const pointSelect = document.getElementById('pointSelect');
+  pointSelect.innerHTML = '<option value="">Nokta Seçiniz</option>';
+  
+  if (!selectedArea || !selectedRegion) return;
+  
+  const area = regions[selectedRegion].areas.find(a => a.id === selectedArea);
+  if (area) {
+    area.points.forEach(point => {
+      const option = document.createElement('option');
+      option.value = point;
+      option.textContent = point;
+      pointSelect.appendChild(option);
+    });
+  }
+}
+
+// ============ KAYIT GÖNDERME ============
+async function submitRecord() {
+  const region = document.getElementById('regionSelect').value;
+  const area = document.getElementById('areaSelect').value;
+  const point = document.getElementById('pointSelect').value;
+  const date = document.getElementById('dateInput').value;
+  const species = document.getElementById('speciesInput').value;
+  const count = parseInt(document.getElementById('countInput').value) || 0;
+  const notes = document.getElementById('notesInput').value;
+  
+  // Validasyon
+  if (!region || !area || !point || !date || !species) {
+    alert('⚠️ Lütfen tüm zorunlu alanları doldurunuz!');
+    return;
+  }
+  
+  const record = {
+    region,
+    area,
+    point,
+    date,
+    species,
+    count,
+    notes,
+    status: 'submitted',
+    submittedAt: new Date().toISOString()
+  };
+  
+  try {
+    if (supabaseReady) {
+      // Supabase'e kaydet
+      const { data, error } = await supabase
+        .from('kosks_records')
+        .insert([record]);
+      
+      if (error) throw error;
+      console.log('✅ Kayıt Supabase\'e gönderildi');
+    }
+    
+    // Yerel depolamaya da kaydet
+    allRecords.push(record);
+    localStorage.setItem('kosks_records', JSON.stringify(allRecords));
+    
+    alert('✅ Kayıt başarıyla gönderildi!');
+    
+    // Formu temizle
+    document.getElementById('speciesInput').value = '';
+    document.getElementById('countInput').value = '0';
+    document.getElementById('notesInput').value = '';
+    
+    // Tabloyu güncelle
+    displayRecords();
+    
+  } catch (error) {
+    console.error('❌ Gönderim hatası:', error);
+    alert('❌ Gönderim sırasında hata oluştu: ' + error.message);
+  }
+}
+
+// ============ KAYITLARI YÜKLE ve GÖRÜNTÜLE ============
+async function loadRecords() {
+  try {
+    if (supabaseReady) {
+      // Supabase'den yükle
+      const { data, error } = await supabase
+        .from('kosks_records')
+        .select('*')
+        .order('submittedAt', { ascending: false });
+      
+      if (error) throw error;
+      allRecords = data || [];
+      console.log('📊 Supabase\'ten ' + allRecords.length + ' kayıt yüklendi');
+    } else {
+      // Yerel depolamadan yükle
+      const stored = localStorage.getItem('kosks_records');
+      allRecords = stored ? JSON.parse(stored) : [];
+      console.log('💾 Yerel depodan ' + allRecords.length + ' kayıt yüklendi');
+    }
+    
+    displayRecords();
+  } catch (error) {
+    console.error('❌ Kayıtlar yüklenemedi:', error);
+  }
+}
+
+function displayRecords() {
+  const tbody = document.getElementById('recordsBody');
+  tbody.innerHTML = '';
+  
+  allRecords.forEach((record, index) => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${record.region}</td>
+      <td>${record.area}</td>
+      <td>${record.point}</td>
+      <td>${record.date}</td>
+      <td>${record.species}</td>
+      <td>${record.count}</td>
+      <td><span class="status-badge status-${record.status}">${record.status}</span></td>
+      <td><button class="btn-danger" onclick="deleteRecord(${index})" style="padding:5px 10px;font-size:0.85rem;">Sil</button></td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+async function deleteRecord(index) {
+  if (!confirm('Bu kaydı silmek istediğinize emin misiniz?')) return;
+  
+  try {
+    const record = allRecords[index];
+    
+    if (supabaseReady && record.id) {
+      // Supabase'den sil
+      const { error } = await supabase
+        .from('kosks_records')
+        .delete()
+        .eq('id', record.id);
+      
+      if (error) throw error;
+    }
+    
+    // Yerel diziden sil
+    allRecords.splice(index, 1);
+    localStorage.setItem('kosks_records', JSON.stringify(allRecords));
+    
+    displayRecords();
+    alert('✅ Kayıt silindi');
+  } catch (error) {
+    console.error('❌ Silme hatası:', error);
+    alert('❌ Silme sırasında hata oluştu');
+  }
+}
+
+// ============ VERİ DIŞA AKTARMA ============
+function exportData() {
+  if (allRecords.length === 0) {
+    alert('⚠️ Dışa aktarılacak kayıt yok!');
+    return;
+  }
+  
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet(allRecords);
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Kayıtlar');
+  XLSX.writeFile(workbook, 'KOSKS_Kayitlari_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  
+  alert('✅ Veriler Excel olarak indirildi');
+}
+
+// ============ HARITA ============
+let map = null;
+
+function initMap() {
+  if (map) map.remove();
+  
+  map = L.map('map').setView([39.0, 35.0], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19
+  }).addTo(map);
+  
+  // Örnek markırlar
+  const alanKonumlari = {
+    'area_Ada_001': [36.77, 34.31],
+    'area_Ank_001': [39.95, 33.73]
+  };
+  
+  Object.entries(alanKonumlari).forEach(([areaId, [lat, lon]]) => {
+    L.marker([lat, lon]).addTo(map).bindPopup(areaId);
+  });
+}
+
+// ============ ÇIKIŞ ============
+function logout() {
+  if (confirm('Çıkış yapmak istediğinize emin misiniz?')) {
+    document.getElementById('screen-app').classList.remove('active');
+    document.getElementById('screen-landing').classList.add('active');
+    document.getElementById('regionSelect').value = '';
+    updateAreas();
+  }
+}
+
+// ============ BAŞLANGIÇ ============
+window.addEventListener('load', () => {
+  console.log('🚀 KOSKS uygulaması yüklendi');
+});
+</script>
+</body>
+</html>
